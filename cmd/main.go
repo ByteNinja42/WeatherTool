@@ -11,11 +11,8 @@ import (
 )
 
 func main() {
-	cityToSearch := ""
-	defaultCity := "Minsk"
-	if len(os.Args) == 1 {
-		cityToSearch = defaultCity
-	} else {
+	cityToSearch := "Warsaw"
+	if len(os.Args) > 1 {
 		cityToSearch = os.Args[1]
 	}
 	cfg := config.NewRedisConfig()
