@@ -23,37 +23,37 @@ type WeatherRepo interface {
 	StoreWeatherForecast(city string, forecast entities.WeatherForecastRepo) error
 }
 
-func (w WeatherService) GetCurrentWeatherForecast(city string) (WeatherForecast, error) {
+func (w WeatherService) GetCurrentWeatherForecast(city string) (entities.WeatherForecast, error) {
 	var forecastTime time.Time
 	if city == "" {
-		return WeatherForecast{}, nil
+		return entities.WeatherForecast{}, fmt.Errorf("city name can't be empty")
 	}
 
 	weatherForecastFull, err := w.GetCachedWeatherForecast(city)
 	if err != nil {
 		if !errors.Is(err, entities.ErrForecastNotFound) {
-			return WeatherForecast{}, err
+			return entities.WeatherForecast{}, err
 		}
 
 		weatherForecastFull, err = getForecastAPI(city)
 		if err != nil {
-			return WeatherForecast{}, err
+			return entities.WeatherForecast{}, err
 		}
 		err = w.StoreWeatherForecast(city, weatherForecastFull)
 		if err != nil {
-			return WeatherForecast{}, err
+			return entities.WeatherForecast{}, err
 		}
 		return weatherForecastToResponse(weatherForecastFull), nil
 	}
 
 	timeNow, err := getTimeNowLocation(weatherForecastFull.Location.TzID)
 	if err != nil {
-		return WeatherForecast{}, err
+		return entities.WeatherForecast{}, err
 	}
 
 	location, err := time.LoadLocation(weatherForecastFull.Location.TzID)
 	if err != nil {
-		return WeatherForecast{}, err
+		return entities.WeatherForecast{}, err
 	}
 
 	forecastTime, err = time.ParseInLocation("2006-01-02 15:04", weatherForecastFull.Location.Localtime, location)
@@ -61,11 +61,11 @@ func (w WeatherService) GetCurrentWeatherForecast(city string) (WeatherForecast,
 	if forecastTime.Add(time.Hour).Before(timeNow) {
 		weatherForecastFull, err = getForecastAPI(city)
 		if err != nil {
-			return WeatherForecast{}, err
+			return entities.WeatherForecast{}, err
 		}
 		err = w.StoreWeatherForecast(city, weatherForecastFull)
 		if err != nil {
-			return WeatherForecast{}, err
+			return entities.WeatherForecast{}, err
 		}
 	}
 	return weatherForecastToResponse(weatherForecastFull), nil
@@ -107,9 +107,9 @@ func getTimeNowLocation(timeZone string) (time.Time, error) {
 	return currentTime, nil
 }
 
-func weatherForecastToResponse(fullForecast entities.WeatherForecastRepo) WeatherForecast {
+func weatherForecastToResponse(fullForecast entities.WeatherForecastRepo) entities.WeatherForecast {
 
-	forecast := WeatherForecast{
+	forecast := entities.WeatherForecast{
 		City:                   fullForecast.Location.Name,
 		Country:                fullForecast.Location.Country,
 		Temperature:            fullForecast.Current.TempC,
