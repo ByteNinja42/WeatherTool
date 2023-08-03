@@ -1,6 +1,4 @@
-package models
-
-import "errors"
+package entities
 
 type WeatherForecastRepo struct {
 	Location struct {
@@ -43,5 +41,3 @@ type WeatherForecastRepo struct {
 		GustKph    float64 `json:"gust_kph"`
 	} `json:"current"`
 }
-
-var ErrForecastNotFound = errors.New("forecast for this city wasn't found")
