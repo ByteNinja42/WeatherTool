@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/ByteNinja42/WeatherTool/config"
 	"github.com/ByteNinja42/WeatherTool/internal/repository"
@@ -10,6 +11,13 @@ import (
 )
 
 func main() {
+	cityToSearch := ""
+	defaultCity := "Minsk"
+	if len(os.Args) == 1 {
+		cityToSearch = defaultCity
+	} else {
+		cityToSearch = os.Args[1]
+	}
 	cfg := config.NewRedisConfig()
 	client, err := repository.RedisClientInit(cfg)
 	if err != nil {
@@ -21,9 +29,10 @@ func main() {
 		log.Fatal(err)
 	}
 	service := service.NewWeatherService(rep)
-	forecast, err := service.GetCurrentWeatherForecast("Minsk")
+
+	forecast, err := service.GetCurrentWeatherForecast(cityToSearch)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println(forecast)
+	fmt.Printf("%+v\n", forecast)
 }

@@ -20,6 +20,7 @@ func NewWeatherService(weatherRepo WeatherRepo) WeatherService {
 
 type WeatherRepo interface {
 	GetCachedWeatherForecast(city string) (models.WeatherForecastRepo, error)
+	StoreWeatherForecast(city string, forecast models.WeatherForecastRepo) error
 }
 
 func (w WeatherService) GetCurrentWeatherForecast(city string) (WeatherForecast, error) {
@@ -38,6 +39,10 @@ func (w WeatherService) GetCurrentWeatherForecast(city string) (WeatherForecast,
 		if err != nil {
 			return WeatherForecast{}, err
 		}
+		err = w.StoreWeatherForecast(city, weatherForecastFull)
+		if err != nil {
+			return WeatherForecast{}, err
+		}
 		return weatherForecastToResponse(weatherForecastFull), nil
 	}
 
@@ -45,10 +50,20 @@ func (w WeatherService) GetCurrentWeatherForecast(city string) (WeatherForecast,
 	if err != nil {
 		return WeatherForecast{}, err
 	}
-	forecastTime, err = time.Parse("2006-01-02 15:04", weatherForecastFull.Location.Localtime)
+
+	location, err := time.LoadLocation(weatherForecastFull.Location.TzID)
+	if err != nil {
+		return WeatherForecast{}, err
+	}
+
+	forecastTime, err = time.ParseInLocation("2006-01-02 15:04", weatherForecastFull.Location.Localtime, location)
 
 	if forecastTime.Add(time.Hour).Before(timeNow) {
 		weatherForecastFull, err = getForecastAPI(city)
+		if err != nil {
+			return WeatherForecast{}, err
+		}
+		err = w.StoreWeatherForecast(city, weatherForecastFull)
 		if err != nil {
 			return WeatherForecast{}, err
 		}
@@ -66,6 +81,15 @@ func getForecastAPI(city string) (models.WeatherForecastRepo, error) {
 		return models.WeatherForecastRepo{}, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		var errResponse ErrorResponseAPI
+		err = json.NewDecoder(resp.Body).Decode(&errResponse)
+		if err != nil {
+			return models.WeatherForecastRepo{}, err
+		}
+		return models.WeatherForecastRepo{}, fmt.Errorf("error request API : status code : %d message : %s", resp.StatusCode, errResponse.Error.Message)
+	}
 
 	err = json.NewDecoder(resp.Body).Decode(&forecastFull)
 	if err != nil {
