@@ -3,18 +3,16 @@ package main
 import (
 	"fmt"
 	"log"
-	"os"
+	"net/http"
 
 	"github.com/ByteNinja42/WeatherTool/config"
+	"github.com/ByteNinja42/WeatherTool/internal/handlers"
 	"github.com/ByteNinja42/WeatherTool/internal/repository"
 	"github.com/ByteNinja42/WeatherTool/internal/service"
+	"github.com/labstack/echo/v4"
 )
 
 func main() {
-	cityToSearch := "Warsaw"
-	if len(os.Args) > 1 {
-		cityToSearch = os.Args[1]
-	}
 	cfg := config.NewRedisConfig()
 	client, err := repository.RedisClientInit(cfg)
 	if err != nil {
@@ -26,10 +24,17 @@ func main() {
 		log.Fatal(err)
 	}
 	service := service.NewWeatherService(rep)
-
-	forecast, err := service.GetCurrentWeatherForecast(cityToSearch)
-	if err != nil {
+	handler := handlers.NewHandler(service)
+	if err := startServer(handler); err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("%+v\n", forecast)
+}
+
+func startServer(handler handlers.Handler) error {
+	e := echo.New()
+	e.GET("/forecast/current/:city", handler.GetWeather)
+	if err := e.Start(":8080"); err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }
