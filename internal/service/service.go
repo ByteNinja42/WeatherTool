@@ -1,1 +1,104 @@
 package service
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/ByteNinja42/WeatherTool/models"
+)
+
+type WeatherService struct {
+	WeatherRepo
+}
+
+func NewWeatherService(weatherRepo WeatherRepo) WeatherService {
+	return WeatherService{WeatherRepo: weatherRepo}
+}
+
+type WeatherRepo interface {
+	GetCachedWeatherForecast(city string) (models.WeatherForecastRepo, error)
+}
+
+func (w WeatherService) GetCurrentWeatherForecast(city string) (WeatherForecast, error) {
+	var forecastTime time.Time
+	if city == "" {
+		return WeatherForecast{}, nil
+	}
+
+	weatherForecastFull, err := w.GetCachedWeatherForecast(city)
+	if err != nil {
+		if !errors.Is(err, models.ErrForecastNotFound) {
+			return WeatherForecast{}, err
+		}
+
+		weatherForecastFull, err = getForecastAPI(city)
+		if err != nil {
+			return WeatherForecast{}, err
+		}
+		return weatherForecastToResponse(weatherForecastFull), nil
+	}
+
+	timeNow, err := getTimeNowLocation(weatherForecastFull.Location.TzID)
+	if err != nil {
+		return WeatherForecast{}, err
+	}
+	forecastTime, err = time.Parse("2006-01-02 15:04", weatherForecastFull.Location.Localtime)
+
+	if forecastTime.Add(time.Hour).Before(timeNow) {
+		weatherForecastFull, err = getForecastAPI(city)
+		if err != nil {
+			return WeatherForecast{}, err
+		}
+	}
+	return weatherForecastToResponse(weatherForecastFull), nil
+
+}
+
+func getForecastAPI(city string) (models.WeatherForecastRepo, error) {
+	var forecastFull models.WeatherForecastRepo
+	client := http.DefaultClient
+	url := fmt.Sprintf("http://api.weatherapi.com/v1/current.json?key=ca67825b0cd44493a6c90650230208&q=%s&aqi=no", city)
+	resp, err := client.Get(url)
+	if err != nil {
+		return models.WeatherForecastRepo{}, err
+	}
+	defer resp.Body.Close()
+
+	err = json.NewDecoder(resp.Body).Decode(&forecastFull)
+	if err != nil {
+		return models.WeatherForecastRepo{}, err
+	}
+	return forecastFull, nil
+}
+
+func getTimeNowLocation(timeZone string) (time.Time, error) {
+	location, err := time.LoadLocation(timeZone)
+	if err != nil {
+		return time.Time{}, err
+	}
+	currentTime := time.Now().In(location)
+	return currentTime, nil
+}
+
+func weatherForecastToResponse(fullForecast models.WeatherForecastRepo) WeatherForecast {
+
+	forecast := WeatherForecast{
+		City:                   fullForecast.Location.Name,
+		Country:                fullForecast.Location.Country,
+		Temperature:            fullForecast.Current.TempC,
+		TemperatureMeasurement: "°C",
+		LocalTime:              fullForecast.Location.Localtime,
+		Condition:              fullForecast.Current.Condition.Text,
+		WindSpeed:              fullForecast.Current.WindKph,
+		WindMeasurement:        "kph",
+		Humidity:               fullForecast.Current.Humidity,
+	}
+	if fullForecast.Location.Country == "United States of America" {
+		forecast.TemperatureMeasurement = "°F"
+		forecast.WindMeasurement = "mph"
+	}
+	return forecast
+}
